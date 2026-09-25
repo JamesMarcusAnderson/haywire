@@ -1,0 +1,82 @@
+# Picoprobe bring-up sessions — Raspberry Pi Pico as CMSIS-DAP probe
+# Source: DeepSeek conversation 65aaf874-aaf0-4407-891e-b2defa7fbbd0
+#         "Setting Up Picoprobe with Raspberry Pi Pico" (2025-04-01)
+# All output below is the author's own pasted terminal output and wiring notes.
+# Probe USB serial redacted. Host: Intel MacBook, macOS, zsh.
+
+## Wiring (author's notes, as asked while connecting it up)
+
+i plug the 3 pin cable into picoprobe to the debug plug then plug 3 pin to
+uart in picoprobe the yellow female jumper to pin 1, orange pin 2 and black
+tp pin 3 of pico?
+
+## Attempt 1 — picoprobe.cfg not present in this OpenOCD build
+
+% openocd -f interface/picoprobe.cfg -f target/rp2040.cfg
+Open On-Chip Debugger 0.12.0+dev-01924-gfe3aa0a4b (2025-03-29-21:39)
+Licensed under GNU GPL v2
+For bug reports, read
+	http://openocd.org/doc/doxygen/bugs.html
+embedded:startup.tcl:28: Error: Can't find interface/picoprobe.cfg
+Traceback (most recent call last):
+  File "embedded:startup.tcl", line 28, in script
+    find interface/picoprobe.cfg
+
+## Attempt 2 — CMSIS-DAP: probe up, RP2040 target examined, GDB server live
+
+% openocd -f interface/cmsis-dap.cfg -f target/rp2040.cfg
+Open On-Chip Debugger 0.12.0+dev-01924-gfe3aa0a4b (2025-03-31-18:21)
+Licensed under GNU GPL v2
+For bug reports, read
+	http://openocd.org/doc/doxygen/bugs.html
+Info : [rp2040.core0] Hardware thread awareness created
+Info : [rp2040.core1] Hardware thread awareness created
+Info : Listening on port 6666 for tcl connections
+Info : Listening on port 4444 for telnet connections
+Warn : An adapter speed is not selected in the init scripts. OpenOCD will try to run the adapter at very low speed (100 kHz).
+Warn : To remove this warnings and achieve reasonable communication speed with the target, set "adapter speed" or "jtag_rclk" in the init scripts.
+Info : Using CMSIS-DAPv2 interface with VID:PID=0x2e8a:0x000c, serial=[redacted]
+Info : CMSIS-DAP: SWD supported
+Info : CMSIS-DAP: Atomic commands supported
+Info : CMSIS-DAP: Test domain timer supported
+Info : CMSIS-DAP: FW Version = 2.0.0
+Info : CMSIS-DAP: Interface Initialised (SWD)
+Info : SWCLK/TCK = 0 SWDIO/TMS = 0 TDI = 0 TDO = 0 nTRST = 0 nRESET = 0
+Info : CMSIS-DAP: Interface ready
+Info : clock speed 100 kHz
+Info : SWD DPIDR 0x0bc12477, DLPIDR 0x00000001
+Info : SWD DPIDR 0x0bc12477, DLPIDR 0x10000001
+Info : [rp2040.core0] Cortex-M0+ r0p1 processor detected
+Info : [rp2040.core0] target has 4 breakpoints, 2 watchpoints
+Info : [rp2040.core0] Examination succeed
+Info : [rp2040.core1] Cortex-M0+ r0p1 processor detected
+Info : [rp2040.core1] target has 4 breakpoints, 2 watchpoints
+Info : [rp2040.core1] Examination succeed
+Info : [rp2040.core0] starting gdb server on 3333
+Info : Listening on port 3333 for gdb connections
+
+is that what terminal 1 should look like?
+
+## Attempt 3 — raspberrypi-swd.cfg not present in this OpenOCD build
+
+% openocd -f interface/raspberrypi-swd.cfg -f target/rp2040.cfg
+Open On-Chip Debugger 0.12.0+dev-01924-gfe3aa0a4b (2025-03-31-18:21)
+Licensed under GNU GPL v2
+For bug reports, read
+	http://openocd.org/doc/doxygen/bugs.html
+embedded:startup.tcl:28: Error: Can't find interface/raspberrypi-swd.cfg
+Traceback (most recent call last):
+  File "embedded:startup.tcl", line 28, in script
+    find interface/raspberrypi-swd.cfg
+
+## Author's draft config (untested, as sketched in-chat)
+
+# Pi Pico as Picoprobe (CMSIS-DAP)
+source [find interface/cmsis-dap.cfg]
+transport select jtag
+adapter speed 1000
+
+# iPhone X (A11 Chip)
+source [find target/armv7a.cfg]
+set _CPUTAPID 0x4ba00477
+reset_config trst_and_srst will that work?
