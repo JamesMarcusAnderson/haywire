@@ -2,6 +2,10 @@
 
 Reproducing the published checkm8 SecureROM dump of Apple's Lightning Digital AV Adapter (S5L8747).
 
+**Scope:** personally-owned hardware on an isolated bench, read-only
+throughout — no writes to the target, no firmware redistribution, no
+third-party systems.
+
 ## What this is
 
 In September 2019, axi0mX published **checkm8**, an unpatchable bootrom exploit affecting Apple's A5–A11-era chips and related S5L parts. Because the flaw lives in mask ROM, it can't be fixed in software — which is exactly what makes it valuable for legitimate security research: a stable, public window into how Apple's earliest boot code works.
@@ -27,6 +31,11 @@ Note: early notes misidentified the adapter's SoC; the device's own DFU-mode ser
 
 ## Where it stopped (documented failures)
 
+- **OpenOCD config false starts.** The OpenOCD build shipped no
+  `picoprobe.cfg` or `raspberrypi-swd.cfg` interface configs — both attempts
+  died at `Can't find interface/...`. The working path was CMSIS-DAP
+  (`cmsis-dap.cfg`): probe up, RP2040 target examined, GDB server live
+  ([session log](sessions/picoprobe-bringup-2025-03-31.log)).
 - **NOR dump failed.** `--dump-nor` errored out: the pwned-DFU device had no matching configuration in the tooling.
 - **iBoot / raw memory dumps failed.** The tooling exposes no iBoot-dump primitive, and direct `--dump=<address>,<length>` memory reads died inside the tool's struct packing. Raw `dd` against the USB device node was never a viable path either.
 - **No interactive console.** Nothing in this work produced a working interactive console on the adapter.
