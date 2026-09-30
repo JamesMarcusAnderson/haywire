@@ -41,3 +41,9 @@ Note: early notes misidentified the adapter's SoC; the device's own DFU-mode ser
 ## Why it's here
 
 "Hardware security research" gets thrown around a lot. This is the honest version: reproduce public work rigorously, verify your artifacts, document your failures as carefully as your successes, and touch nothing you don't own. Strictly white-hat, strictly read-only.
+
+## Credit
+
+checkm8 by @axi0mX (2019 public research). S5L8747 "Haywire" adaptation by
+@a1exdandy. Dump via @nyan_satan's libirecovery/iOS port. Bench work, Python 3
+porting, and bring-up are original.
