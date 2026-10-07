@@ -1,58 +1,84 @@
-# Haywire
+# HAYWIRE — checkm8 SecureROM Research
 
-Reproducing the published checkm8 SecureROM dump of Apple's Lightning Digital AV Adapter (S5L8747).
+BootROM/DFU-mode security research against Apple hardware with exploitable
+BootROMs. Headline result: **checkm8 achieved against a real Apple accessory
+BootROM** (Lightning AV Adapter, S5L8747), plus the DFU toolchain work
+(ipwndfu, palera1n, irecovery) needed to operate across A11/A13 iPhones.
 
-**Scope:** personally-owned hardware on an isolated bench, read-only
-throughout — no writes to the target, no firmware redistribution, no
-third-party systems.
+> Read-only research posture throughout. Failures are documented next to
+> successes. See [REVIEW.md](REVIEW.md) for what is verified, what was
+> corrected, and what remains unproven.
 
-## What this is
+## Targets
 
-In September 2019, axi0mX published **checkm8**, an unpatchable bootrom exploit affecting Apple's A5–A11-era chips and related S5L parts. Because the flaw lives in mask ROM, it can't be fixed in software — which is exactly what makes it valuable for legitimate security research: a stable, public window into how Apple's earliest boot code works.
+| Target | Chip | CPID | Notes |
+|---|---|---|---|
+| Apple Lightning AV Adapter | S5L8747 (A8) | 8747 | checkm8 PWND achieved 2025-05-30, iBoot-1413.8 |
+| iPhone X | A11 (T8015) | 8015 | palera1n v2.1-beta.2, iOS 15.5, DFU workflows |
+| iPhone 11 (n104) | A13 | — | RESEARCH bootloader upload sequences via irecovery |
+| iPhone 8 DVT | A11 | — | CPFM:01 dev unit, IPSW component extraction (iOS 11.0) |
 
-The Lightning Digital AV Adapter is one of the more interesting checkm8 targets. It isn't a phone — it's a dongle with its own system-on-chip (S5L8747) running a minimal iOS. Community researchers (notably @a1exdandy's s5l8747x "Haywire" adaptation of the public checkm8 exploit) showed the adapter's SecureROM could be dumped just like any other vulnerable device.
+## Timeline
 
-This repo documents my independent reproduction of that published work — May 2025, on my own bench, with my own adapted tooling. Nothing here is a new exploit. The point was to prove I could take public research end-to-end — target acquisition, DFU, exploitation, extraction, verification — and to learn exactly where the published path stops.
+- **2025-04-18 → 2025-06** — Toolchain: resurrecting axi0mX's Python 2.7
+  `ipwndfu` on macOS 11.7.10 (T2 MacBook Air) and macOS 15.4 (x86_64)
+- **2025-05-30** — `PWND:[checkm8]` on the Lightning AV Adapter
+  (`CPID:8747 … exploit success! took 1.17s`); SecureROM dumped
+- **2025-06-22 → 2025-08** — DFU/recovery workflows, SecureROM dump attempts,
+  A13 SecureROM hex-analysis threads
+- **2025-12-19** — iPhone 11 (n104) RESEARCH bootloader upload ordering
 
-## The bench
+## Headline results
 
-- **Host:** MacBook Air (macOS)
-- **Target:** Apple Lightning Digital AV Adapter, enumerating in DFU as `CPID:8747 … SRTG:[iBoot-1413.8]` (device ECID redacted)
-- **Tooling:** my own ipwndfu workspace (`ipwndfu-haywire-master`), ported to Python 3 and maintained for current macOS, plus the public `obscurantistic_checkm8` implementation — banner credits in its own output: checkm8 by @axi0mX, s5l8747x/Haywire implementation by @a1exdandy, libirecovery/iOS port by @nyan_satan
-- **Observation:** DCSD serial cable on the bench (serial-port enumeration during setup)
+1. **Working checkm8 exploit of the S5L8747 accessory BootROM**, with a
+   full SecureROM dump (`SecureROM-s5l8747xsi-1413.8-RELEASE.dump`) — see
+   [docs/checkm8-av-adapter.md](docs/checkm8-av-adapter.md).
 
-Note: early notes misidentified the adapter's SoC; the device's own DFU-mode serial string (`CPID:8747`) settled it as S5L8747 before any exploitation ran.
+   ![checkm8 exploitation flow](docs/images/checkm8-flow.webp)
+2. **Python 2.7 DFU toolchain resurrected on unsupported macOS** — manual
+   2.7.18 install, `pyusb`/`libusb` wiring, Python 2→3 `sed` migration of
+   ipwndfu, Git LFS `bin/` fix — see [docs/toolchain.md](docs/toolchain.md).
+3. **Operational irecovery bootchain upload order** for n104 RESEARCH
+   bootloaders: iBSS → iBEC → LLB → iBoot → DeviceTree → sep-firmware →
+   kernel → ramdisk → `bootx`.
+4. **Unverified:** an assistant-generated claim of a new A13 SecureROM
+   vulnerability (bounds-check bypass at `0x124a8`). Treated as unproven —
+   see [docs/secure-rom-notes.md](docs/secure-rom-notes.md) and
+   [REVIEW.md](REVIEW.md).
 
-## What worked
+## File guide
 
-1. **Pwned DFU.** The public checkm8 flow ran clean against the adapter: USB device discovery → heap grooming (`leaking…`) → use-after-free trigger → payload delivery → `PWND:[checkm8]`, `exploit success!` in about 1.2 seconds.
-2. **SecureROM dump.** With the device in pwned DFU, `./ipwndfu --dump-rom` produced `SecureROM-s5l8747xsi-1413.8-RELEASE.dump`.
-3. **Verification.** `strings` against the dump recovers the ROM's own self-identification — `SecureROM for s5l8747xsi, Copyright 2011, Apple Inc.`, `RELEASE`, `iBoot-1413.8` — matching the version string the device reported in DFU. The dump is genuine.
+```
+haywire/
+├── README.md                      # this file
+├── REVIEW.md                      # technical review: corrections, flags, open questions
+└── docs/
+    ├── checkm8-av-adapter.md      # S5L8747 exploit procedure, receipts, dump sequence
+    ├── toolchain.md               # ipwndfu on modern macOS, pyusb, LFS, DCSD serial
+    ├── secure-rom-notes.md        # SecureROM/iBoot/SEP dump notes, A13 analysis status
+    ├── glossary.md                # DFU, SecureROM, checkm8, CPID-field terminology
+    └── images/                    # diagrams (see below)
+```
 
-## Where it stopped (documented failures)
+## Diagrams
 
-- **OpenOCD config false starts.** The OpenOCD build shipped no
-  `picoprobe.cfg` or `raspberrypi-swd.cfg` interface configs — both attempts
-  died at `Can't find interface/...`. The working path was CMSIS-DAP
-  (`cmsis-dap.cfg`): probe up, RP2040 target examined, GDB server live
-  ([session log](sessions/picoprobe-bringup-2025-03-31.log)).
-- **NOR dump failed.** `--dump-nor` errored out: the pwned-DFU device had no matching configuration in the tooling.
-- **iBoot / raw memory dumps failed.** The tooling exposes no iBoot-dump primitive, and direct `--dump=<address>,<length>` memory reads died inside the tool's struct packing. Raw `dd` against the USB device node was never a viable path either.
-- **No interactive console.** Nothing in this work produced a working interactive console on the adapter.
-- **No firmware modification.** Nothing was written back to the device — no NOR flash, no patches, no MFi changes. Read-only the entire way.
+All under `docs/images/` and embedded in the relevant docs:
 
-## What this is not
+| Diagram | Shows | In |
+|---|---|---|
+| `checkm8-flow.webp` | DFU → leak → UaF → payload → PWND sequence + post-exploit dumps | checkm8-av-adapter.md, README |
+| `av-adapter-overview.webp` | Illustrated Lightning AV Adapter with S5L8747 callout | checkm8-av-adapter.md |
+| `secure-bootchain.webp` | Apple secure boot chain; where checkm8 strikes | checkm8-av-adapter.md |
+| `toolchain-device-map.webp` | ipwndfu / palera1n / irecovery → their target devices | toolchain.md |
+| `dfu-device-states.webp` | DFU → pwned DFU → recovery → normal boot states | toolchain.md |
+| `irecovery-bootchain-sequence.webp` | n104 RESEARCH upload order, step by step | toolchain.md |
 
-- Not a new vulnerability or exploit — checkm8 is @axi0mX's 2019 public research; the S5L8747 adaptation is @a1exdandy's public work. I reproduced it.
-- Not a bypass tool and not firmware redistribution — there are no binaries, no dumps, no payloads, and no step-by-step exploitation instructions in this repo, and there never will be.
-- Not a complete device compromise — one read-only ROM dump, plus a documented wall of failed follow-ons.
+Diagrams were AI-generated and manually checked for legibility and spelling.
+The adapter illustration's board-level details are illustrative; all labels
+naming the chip, CPID, and iBoot version are sourced. See REVIEW.md.
 
-## Why it's here
+## Source
 
-"Hardware security research" gets thrown around a lot. This is the honest version: reproduce public work rigorously, verify your artifacts, document your failures as carefully as your successes, and touch nothing you don't own. Strictly white-hat, strictly read-only.
-
-## Credit
-
-checkm8 by @axi0mX (2019 public research). S5L8747 "Haywire" adaptation by
-@a1exdandy. Dump via @nyan_satan's libirecovery/iOS port. Bench work, Python 3
-porting, and bring-up are original.
+Reconstructed from 30 project conversations (2025-04-18 → 2025-12-31).
+One additional conversation tagged to this project (a job search,
+2026-06-30) contains no project content and was excluded.
